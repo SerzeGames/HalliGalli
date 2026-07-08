@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Halli Galli</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg0:#1a0f2b; --bg1:#2c1547;
+    --gold:#ffc94d; --gold2:#ffe08a;
+    --ink:#f6edff; --dim:#c3aade;
+    --line:rgba(255,255,255,.14);
+    --panel:rgba(30,17,48,.82);
+    --danger:#ff5a6a; --ok:#5fd98a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg0);
+    font-family:"Fredoka","Trebuchet MS",system-ui,sans-serif;color:var(--ink);
+    -webkit-user-select:none;user-select:none;touch-action:none}
+  #game{position:fixed;inset:0;display:block}
+
+  /* ---- HUD ---- */
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+  .brand{position:absolute;top:14px;left:16px;pointer-events:none;line-height:1}
+  .brand b{font-weight:700;font-size:clamp(20px,3.6vw,30px);letter-spacing:.5px;
+    color:var(--gold2);text-shadow:0 2px 0 rgba(0,0,0,.35),0 0 22px rgba(255,201,77,.35)}
+  .brand span{display:block;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-top:2px}
+  .tools{position:absolute;top:12px;right:12px;display:flex;gap:8px;pointer-events:auto}
+  .btn{pointer-events:auto;border:1px solid var(--line);background:rgba(255,255,255,.06);
+    color:var(--ink);font-family:inherit;font-weight:600;font-size:14px;
+    padding:9px 12px;border-radius:12px;cursor:pointer;backdrop-filter:blur(6px);
+    transition:transform .12s ease,background .2s ease,border-color .2s}
+  .btn:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.28)}
+  .btn:active{transform:translateY(1px) scale(.98)}
+  .btn.ic{width:42px;height:42px;padding:0;display:grid;place-items:center;font-size:18px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;backdrop-filter:blur(6px)}
+  .seg button{pointer-events:auto;border:0;background:transparent;color:var(--dim);font-family:inherit;
+    font-weight:600;font-size:13px;padding:9px 11px;cursor:pointer}
+  .seg button.on{background:var(--gold);color:#3a2400}
+  .hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+    font-size:13px;color:var(--dim);background:rgba(0,0,0,.28);padding:7px 14px;border-radius:999px;
+    border:1px solid var(--line);pointer-events:none;opacity:.9;white-space:nowrap}
+
+  /* ---- Overlays ---- */
+  .layer{position:fixed;inset:0;z-index:20;display:none;place-items:center;
+    background:rgba(10,6,18,.62);backdrop-filter:blur(7px);padding:20px}
+  .layer.show{display:grid;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .card-modal{width:min(560px,94vw);max-height:88vh;overflow:auto;background:var(--panel);
+    border:1px solid var(--line);border-radius:22px;padding:26px 26px 22px;
+    box-shadow:0 30px 90px rgba(0,0,0,.6)}
+  .card-modal h1{margin:0 0 4px;font-size:30px;color:var(--gold2);letter-spacing:.5px}
+  .card-modal h2{margin:0 0 14px;font-size:15px;font-weight:500;color:var(--dim)}
+  .card-modal h3{margin:18px 0 6px;font-size:15px;color:var(--gold);text-transform:uppercase;letter-spacing:1.5px}
+  .card-modal p,.card-modal li{color:var(--ink);font-size:14.5px;line-height:1.5;font-weight:400}
+  .card-modal ul{margin:6px 0;padding-left:18px}
+  .fr{display:inline-flex;gap:5px;flex-wrap:wrap;margin:4px 0 2px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;
+    padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .cta{margin-top:20px;display:flex;gap:10px;flex-wrap:wrap}
+  .cta .btn.primary{background:var(--gold);color:#3a2400;border-color:transparent;font-size:16px;padding:12px 20px}
+  .cta .btn.primary:hover{background:var(--gold2)}
+  .winline{font-size:18px;margin:6px 0 2px}
+  .winline b{color:var(--gold2)}
+  .scorerow{display:flex;justify-content:space-between;align-items:center;
+    padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.05);margin:6px 0;font-weight:500}
+  .scorerow .nm{display:flex;align-items:center;gap:9px}
+  .scorerow .sq{width:13px;height:13px;border-radius:4px}
+  small.k{display:inline-block;padding:1px 7px;border:1px solid var(--line);border-radius:6px;
+    font-size:12px;color:var(--dim);margin:0 1px}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="hud">
+  <div class="brand"><b>Halli&nbsp;Galli</b><span>vs 3 ordinateurs</span></div>
+  <div class="tools">
+    <div class="seg" id="speedSeg" title="Vitesse de jeu">
+      <button data-sp="0.8">Cool</button>
+      <button data-sp="1" class="on">Normal</button>
+      <button data-sp="1.35">Rapide</button>
+    </div>
+    <button class="btn ic" id="soundBtn" title="Son">🔊</button>
+    <button class="btn ic" id="rulesBtn" title="Règles">?</button>
+    <button class="btn" id="newBtn" title="Nouvelle partie">↻ Rejouer</button>
+  </div>
+  <div class="hint" id="hint">Frappe la sonnette dès que tu vois <b>5 fruits identiques</b> — clic, tap, <small class="k">Espace</small> ou <small class="k">Entrée</small></div>
+</div>
+
+<!-- Écran d'accueil -->
+<div class="layer show" id="startLayer">
+  <div class="card-modal">
+    <h1>Halli Galli</h1>
+    <h2>Observation &amp; rapidité — le premier qui repère 5 fruits identiques sonne.</h2>
+    <div class="fr">
+      <span class="chip"><span class="dot" style="background:#f6cf2b"></span>Bananes</span>
+      <span class="chip"><span class="dot" style="background:#8ec741"></span>Citrons</span>
+      <span class="chip"><span class="dot" style="background:#e83a52"></span>Fraises</span>
+      <span class="chip"><span class="dot" style="background:#9a45c9"></span>Prunes</span>
+    </div>
+    <p>On ne regarde que la carte visible de chaque joueur. Si l'addition d'un même fruit fait <b>exactement 5</b>, on frappe. Sonner à tort = tu donnes une carte à chaque adversaire.</p>
+    <div class="cta">
+      <button class="btn primary" id="playBtn">▶ Jouer</button>
+      <button class="btn" id="rulesBtn2">Voir les règles</button>
+    </div>
+  </div>
+</div>
+
+<!-- Règles -->
+<div class="layer" id="rulesLayer">
+  <div class="card-modal">
+    <h1>Règles</h1>
+    <h2>Halli Galli — 56 cartes, 4 joueurs, 1 sonnette.</h2>
+    <h3>But</h3>
+    <p>Récupérer toutes les cartes. Quand un joueur n'a plus de cartes, il est éliminé ; le dernier en jeu gagne.</p>
+    <h3>Déroulement</h3>
+    <ul>
+      <li>À tour de rôle, chaque joueur retourne sa carte du dessus devant lui.</li>
+      <li>On ne compte que les cartes <b>visibles</b> (une par joueur).</li>
+      <li>Dès que les cartes visibles montrent <b>exactement 5 fruits d'une même espèce</b>, tout le monde essaie de sonner.</li>
+    </ul>
+    <h3>Exemples</h3>
+    <ul>
+      <li>🍌 2 + 🍌 3 = <b>5</b> → on sonne ✔️</li>
+      <li>🍓 5 sur une carte → on sonne ✔️</li>
+      <li>🍋 4 + 🍋 2 = 6 → ❌</li>
+      <li>🟣 1 + 🟣 1 + 🟣 3 = <b>5</b> → ✔️</li>
+    </ul>
+    <h3>Sonnette</h3>
+    <p>Le premier qui sonne correctement récupère toutes les piles visibles et les glisse sous son paquet. Sonner à tort : une carte donnée à chaque autre joueur.</p>
+    <div class="cta"><button class="btn primary" id="rulesClose">Compris</button></div>
+  </div>
+</div>
+
+<!-- Fin de partie -->
+<div class="layer" id="overLayer">
+  <div class="card-modal">
+    <h1 id="overTitle">Partie terminée</h1>
+    <h2 id="overSub"></h2>
+    <div id="overScores"></div>
+    <div class="cta"><button class="btn primary" id="overReplay">↻ Rejouer</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ============================================================
+   HALLI GALLI — moteur canvas 60fps
+   Images attendues : images/spritesheet.png (10 col x 7 lig),
+   images/backcard.png, images/sonette.png
+   Fallback procédural si une image manque (pour tester sans dossier).
+   ============================================================ */
+
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+
+const CFG = {
+  cols:10, rows:7, nCards:56,
+  flipInterval:900,   // ms entre deux retournements (mis à l'échelle par SPEED)
+  flipAnim:250,       // durée de l'animation de retournement
+  hotTimeout:1500,    // fenêtre max si tout le monde loupe une combinaison valide
+  postWin:720, postPenalty:520,
+  dealStagger:26, dealAnim:430,
+};
+let SPEED = 1;
+
+const FRUITS = ['banana','lime','plum','strawberry'];
+const FCOL = { banana:'#f6cf2b', lime:'#8ec741', plum:'#9a45c9', strawberry:'#e83a52' };
+const FCOL2= { banana:'#ffe37a', lime:'#b6e36a', plum:'#c07be0', strawberry:'#ff6f83' };
+
+/* ---------- Deck : mapping EXPLICITE, calqué case par case sur le sheet ----------
+   Lecture ligne par ligne (10 colonnes / ligne), spriteIndex = position réelle.
+   Particularité de CE sheet : pas de carte "4 fraises", mais 3 cartes "5 fraises". */
+const SHEET_SPEC = [
+  // Ligne 1 : 1 fruit
+  ['banana',1,5], ['lime',1,5],
+  // Ligne 2 : 1 fruit
+  ['plum',1,5],   ['strawberry',1,5],
+  // Ligne 3 : 2 fruits  (col1-3 ban, 4-6 cit, 7-9 pru, 10 fra)
+  ['banana',2,3], ['lime',2,3], ['plum',2,3], ['strawberry',2,1],
+  // Ligne 4 : col1-2 fra×2, col3-5 ban×3, col6-8 cit×3, col9-10 pru×3
+  ['strawberry',2,2], ['banana',3,3], ['lime',3,3], ['plum',3,2],
+  // Ligne 5 : col1 pru×3, col2-4 fra×3, col5-6 ban×4, col7-8 cit×4, col9-10 pru×4
+  ['plum',3,1], ['strawberry',3,3], ['banana',4,2], ['lime',4,2], ['plum',4,2],
+  // Ligne 6 : col1-2 fra×5, col3 ban×5, col4 cit×5, col5 pru×5, col6 fra×5
+  ['strawberry',5,2], ['banana',5,1], ['lime',5,1], ['plum',5,1], ['strawberry',5,1],
+];
+function buildDeck(){
+  const d=[]; let i=0;
+  for(const [fruit,count,rep] of SHEET_SPEC)
+    for(let k=0;k<rep;k++) d.push({fruit,count,spriteIndex:i++});
+  return d;   // 56 cartes ; spriteIndex = case exacte du sheet (col=idx%10, row=idx/10)
+}
+
+/* ---------- Images ---------- */
+const IMG={sheet:null,back:null,bell:null,sheetOK:false,backOK:false,bellOK:false};
+const cell={w:102.4,h:102.4};
+function loadImg(src){return new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});}
+async function loadAssets(){
+  const [s,b,be]=await Promise.all([
+    loadImg('images/spritesheet.png'),
+    loadImg('images/backcard.png'),
+    loadImg('images/sonette.png'),
+  ]);
+  IMG.sheet=s;IMG.sheetOK=!!s; IMG.back=b;IMG.backOK=!!b; IMG.bell=be;IMG.bellOK=!!be;
+  if(s){cell.w=s.width/CFG.cols; cell.h=s.height/CFG.rows;}
+}
+
+/* ---------- Utilitaires ---------- */
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const ri=n=>Math.floor(Math.random()*n);
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=ri(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+function gauss(m,s){let u=0,v=0;while(u===0)u=Math.random();while(v===0)v=Math.random();
+  return m+s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+const easeOut=t=>1-Math.pow(1-t,3);
+const easeIO=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const top=arr=>arr.length?arr[arr.length-1]:null;
+
+/* ---------- État ---------- */
+let players=[], phase='loading', current=0, gameActive=false;
+let flip={active:false,player:0,card:null,t:0,dur:CFG.flipAnim};
+let flipTimer=0;
+let hotStart=0, hotSchedule=[], falseSchedule=[];
+let flyers=[], floats=[], pendingAfter=null;
+let T=0, last=0;
+const bell={press:0,rings:[]};
+let flash={c:null,a:0};
+let shakeT=0, shakeMag=0;
+let winnerIdx=-1;
+
+/* ---------- Audio (Web Audio synthétisé, aucun fichier) ---------- */
+let AC=null, muted=false;
+function audio(){ if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}} return AC; }
+function tone(freq,dur,type='sine',vol=.25,when=0,slideTo=null){
+  const ac=audio(); if(!ac||muted) return;
+  const t0=ac.currentTime+when;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t0);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo,t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(vol,t0+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0+dur+0.02);
+}
+function sfxDing(){ tone(1568,.5,'triangle',.3); tone(2093,.55,'sine',.18,.01); tone(1046,.4,'sine',.14,0);}
+function sfxFlip(){ tone(420,.07,'square',.10,0,620);}
+function sfxError(){ tone(150,.28,'sawtooth',.22,0,90); tone(96,.3,'square',.12,.02);}
+function sfxWin(){ [523,659,784,1046].forEach((f,i)=>tone(f,.22,'triangle',.22,i*.08));}
+function sfxTick(){ tone(680,.04,'sine',.05);}
+
+/* ============================================================
+   LAYOUT responsive
+   Slots : 0=bas(joueur), 1=gauche, 2=haut, 3=droite
+   ============================================================ */
+let view={w:0,h:0,dpr:1};
+let L=null;
+function resize(){
+  const w=window.innerWidth, h=window.innerHeight, dpr=Math.min(window.devicePixelRatio||1,2);
+  view={w,h,dpr};
+  cv.width=Math.floor(w*dpr); cv.height=Math.floor(h*dpr);
+  cv.style.width=w+'px'; cv.style.height=h+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  computeLayout();
+}
+function computeLayout(){
+  const {w:W,h:H}=view, cx=W/2, cy=H/2, base=Math.min(W,H);
+  const bellR=clamp(base*0.085,42,82);
+  const cardH=clamp(base*0.155,62,150), cardW=cardH/1.4;
+  const Rv=bellR+cardH*0.72;      // carte visible (intérieur, vers la sonnette)
+  const Rd=Rv+cardH*1.45;         // pioche (extérieur, au coin)
+  const Rl=Rd+cardH*0.95;         // plaque nom
+  const D=Math.SQRT1_2;           // 0.7071 -> diagonales à 45°
+  // X diagonal : chaque joueur dans un coin
+  const dir=[
+    [-D, D],  // 0 Vous  : bas-gauche
+    [-D,-D],  // 1 Léa   : haut-gauche
+    [ D,-D],  // 2 Marco : haut-droite
+    [ D, D],  // 3 Zoé   : bas-droite
+  ];
+  const mx=54, my=20;             // marge pour garder les plaques à l'écran
+  const slots=dir.map(d=>({
+    dir:d,
+    vis :{x:cx+d[0]*Rv, y:cy+d[1]*Rv},
+    draw:{x:cx+d[0]*Rd, y:cy+d[1]*Rd},
+    label:{x:clamp(cx+d[0]*Rl,mx,W-mx), y:clamp(cy+d[1]*Rl,my,H-my)},
+  }));
+  L={W,H,cx,cy,bellR,cardW,cardH,slots};
+}
+
+/* ============================================================
+   MISE EN PLACE / DISTRIBUTION
+   ============================================================ */
+function newGame(){
+  players=[
+    {name:'Vous', human:true,  accent:'#ffcf4d', draw:[],played:[],out:false},
+    {name:'Léa',  human:false, accent:'#ff6b7a', mean:380,std:120,miss:0.06,fr:0.03, draw:[],played:[],out:false},
+    {name:'Marco',human:false, accent:'#8ec741', mean:560,std:150,miss:0.12,fr:0.05, draw:[],played:[],out:false},
+    {name:'Zoé',  human:false, accent:'#f6cf2b', mean:760,std:200,miss:0.20,fr:0.07, draw:[],played:[],out:false},
+  ];
+  const deck=shuffle(buildDeck().map(c=>({...c})));
+  // distribution équitable (14 chacun)
+  deck.forEach((c,i)=>players[i%4].draw.push(c));
+  flyers=[]; floats=[]; hotSchedule=[]; falseSchedule=[]; pendingAfter=null;
+  flip.active=false; bell.rings.length=0; bell.press=0; flash.a=0; shakeT=0;
+  winnerIdx=-1;
+  current=ri(4);
+  gameActive=true;
+  // animation de distribution : chaque carte vole du centre vers sa pioche
+  phase='dealing';
+  const c0={x:L.cx,y:L.cy};
+  let k=0;
+  for(let r=0;r<14;r++) for(let p=0;p<4;p++){
+    const card=players[p].draw[r]; // ordre logique déjà en place
+    flyers.push(makeFlyer(c0, p, card, false, (k*CFG.dealStagger), CFG.dealAnim, true));
+    k++;
+  }
+  hideAll();
+}
+
+/* ============================================================
+   FLYERS (cartes animées : distribution / récupération / pénalité)
+   Toutes les cibles sont des pioches → shownDraw retire les flyers en vol.
+   ============================================================ */
+function makeFlyer(from, toIdx, card, faceUp, delay, dur, deal=false){
+  return {from:{...from}, to:toIdx, card, faceUp, delay, dur:dur||430, t:0, deal,
+          rot0:rnd(-0.4,0.4), landed:false};
+}
+function flyerTarget(f){ return players[f.to] ? L.slots[f.to].draw : {x:L.cx,y:L.cy}; }
+function incoming(idx){let n=0;for(const f of flyers)if(f.to===idx)n++;return n;}
+function shownDraw(p,idx){return Math.max(0,p.draw.length-incoming(idx));}
+function updateFlyers(dt){
+  for(const f of flyers){
+    if(f.delay>0){f.delay-=dt;continue;}
+    f.t+=dt;
+    if(!f.landed && f.t>=f.dur){f.landed=true; if(Math.random()<.5) sfxTick();}
+  }
+  const before=flyers.length;
+  flyers=flyers.filter(f=>!(f.delay<=0 && f.t>=f.dur));
+  if(before && !flyers.length){/* dernier atterri : rien ici, géré par phase */}
+}
+
+/* ============================================================
+   TOUR DE JEU
+   current = index du prochain à retourner. nextFlipper saute
+   les éliminés et ceux sans pioche (ils passent mais restent en jeu).
+   ============================================================ */
+function alivePlayers(){return players.filter(p=>!p.out);}
+function nextFlipper(from){
+  for(let s=0;s<4;s++){const i=(from+s)%4;const p=players[i];
+    if(!p.out && p.draw.length>0) return i;}
+  return null;
+}
+function startPlaying(){ phase='idle'; flipTimer=CFG.postWin*0.6; }
+
+function doFlip(){
+  const idx=nextFlipper(current);
+  if(idx===null){ resolveStall(); return; }
+  current=idx;
+  const p=players[idx];
+  const card=p.draw.pop();               // quitte la pioche (en transit)
+  flip={active:true,player:idx,card,t:0,dur:CFG.flipAnim};
+  falseSchedule=[];
+  sfxFlip();
+}
+function updateFlip(dt){
+  if(!flip.active) return;
+  flip.t+=dt;
+  if(flip.t>=flip.dur){
+    flip.active=false;
+    const p=players[flip.player];
+    p.played.push(flip.card);            // posée sur la pile visible
+    current=(flip.player+1)%4;           // point de départ pour le suivant
+    evaluateAfterFlip();
+  }
+}
+function computeTotals(){
+  const t={banana:0,lime:0,plum:0,strawberry:0};
+  for(const p of players){ if(p.out) continue; const c=top(p.played); if(c) t[c.fruit]+=c.count; }
+  return t;
+}
+function isValidNow(){ const t=computeTotals(); return FRUITS.some(f=>t[f]===5); }
+
+function evaluateAfterFlip(){
+  const t=computeTotals();
+  if(FRUITS.some(f=>t[f]===5)){ enterHot(); }
+  else { scheduleFalseRings(t); flipTimer=CFG.flipInterval; phase='idle'; }
+}
+
+function enterHot(){
+  phase='hot'; hotStart=T; hotSchedule=[];
+  for(let i=1;i<4;i++){
+    const b=players[i]; if(b.out) continue;
+    if(Math.random()<b.miss) continue;            // il loupe
+    const rt=clamp(gauss(b.mean,b.std),180,3000);
+    hotSchedule.push({player:i,time:T+rt});
+  }
+  hotSchedule.sort((a,b)=>a.time-b.time);
+}
+function scheduleFalseRings(t){
+  falseSchedule=[];
+  // un fruit à 4 ou 6 est « tentant » → plus de risque d'erreur
+  const tempting=FRUITS.some(f=>t[f]===4||t[f]===6);
+  for(let i=1;i<4;i++){
+    const b=players[i]; if(b.out||b.draw.length===0&&b.played.length===0) continue;
+    let ch=b.fr*(tempting?2.4:0.35);
+    if(Math.random()<ch){
+      const delay=rnd(220,CFG.flipInterval*0.75);
+      falseSchedule.push({player:i,time:T+delay});
+    }
+  }
+}
+
+function resolveStall(){
+  // personne ne peut retourner : victoire au plus grand paquet
+  let best=-1,bi=0;
+  players.forEach((p,i)=>{const tot=p.draw.length+p.played.length; if(!p.out&&tot>best){best=tot;bi=i;}});
+  endGame(bi);
+}
+
+/* ============================================================
+   SONNETTE : résolution
+   ============================================================ */
+function humanRing(){
+  if(!gameActive) return;
+  if(phase!=='idle'&&phase!=='hot') return;
+  if(players[0].out) return;
+  resolveRing(0, isValidNow());
+}
+function resolveRing(idx, correct){
+  hotSchedule=[]; falseSchedule=[];
+  bell.press=1; bell.rings.push({t:0,good:correct});
+  if(correct) collectPiles(idx); else penalty(idx);
+}
+
+function collectPiles(widx){
+  const w=players[widx];
+  const cards=[];
+  players.forEach((p,i)=>{
+    const from=L.slots[i].vis;
+    for(let k=0;k<p.played.length;k++) cards.push({card:p.played[k],from});
+    p.played=[];
+  });
+  shuffle(cards);
+  cards.forEach(c=>w.draw.unshift(c.card));            // sous le paquet (front = dessous)
+  cards.forEach((c,i)=>flyers.push(makeFlyer(c.from,widx,c.card,true,i*20,430)));
+  flash={c:'rgba(95,217,138,',a:.5}; sfxDing(); sfxWin();
+  floats.push(mkFloat(L.slots[widx].vis, '+'+cards.length, w.accent, true));
+  floats.push(mkFloat({x:L.cx,y:L.cy-L.bellR-18}, w.human?'Bien vu !':w.name+' sonne !', '#ffe08a'));
+  phase='resolve';
+  pendingAfter=()=>{
+    checkElim();
+    if(checkOver()) return;
+    current=widx; flipTimer=CFG.postWin; phase='idle';
+  };
+}
+
+function penalty(oidx){
+  const off=players[oidx];
+  const from=L.slots[oidx].draw;
+  const recip=[0,1,2,3].filter(i=>i!==oidx && !players[i].out);
+  let n=0;
+  for(const ri2 of recip){
+    let card=off.draw.pop()||off.played.pop();
+    if(!card) break;
+    players[ri2].draw.unshift(card);
+    flyers.push(makeFlyer(from,ri2,card,false,(n++)*70,430));
+  }
+  flash={c:'rgba(255,90,106,',a:.5}; sfxError(); shakeT=1; shakeMag=10;
+  floats.push(mkFloat(L.slots[oidx].vis, off.human?'Raté !':off.name+' se trompe', '#ff6f83', true));
+  phase='resolve';
+  pendingAfter=()=>{
+    checkElim();
+    if(checkOver()) return;
+    flipTimer=CFG.postPenalty; phase='idle';   // on continue, current inchangé
+  };
+}
+
+function checkElim(){
+  players.forEach(p=>{ if(!p.out && p.draw.length+p.played.length===0){ p.out=true; } });
+}
+function checkOver(){
+  const alive=alivePlayers();
+  if(alive.length<=1){ endGame(players.indexOf(alive[0]||players[0])); return true; }
+  return false;
+}
+function endGame(widx){
+  winnerIdx=widx; phase='gameover'; showOver(widx);
+}
+
+function endHotMiss(){
+  hotSchedule=[]; flipTimer=CFG.flipInterval*0.55; phase='idle';
+}
+
+/* ============================================================
+   BOUCLE
+   ============================================================ */
+function update(dt){
+  T+= dt;
+  updateFlyers(dt);
+  updateFlip(dt);
+  updateEffects(dt);
+
+  switch(phase){
+    case 'dealing':
+      if(!flyers.length) startPlaying();
+      break;
+    case 'idle':
+      if(flip.active) break;
+      // fausses sonnettes des bots (état invalide)
+      for(const s of falseSchedule){ if(T>=s.time){ resolveRing(s.player,false); return; } }
+      flipTimer-= dt*SPEED;
+      if(flipTimer<=0) doFlip();
+      break;
+    case 'hot':
+      for(let k=0;k<hotSchedule.length;k++){
+        if(T>=hotSchedule[k].time){ resolveRing(hotSchedule[k].player,true); return; }
+      }
+      if(hotSchedule.length===0 && T-hotStart>CFG.hotTimeout) endHotMiss();
+      else if(T-hotStart>CFG.hotTimeout*1.6) endHotMiss();
+      break;
+    case 'resolve':
+      if(!flyers.length && pendingAfter){ const f=pendingAfter; pendingAfter=null; f(); }
+      break;
+  }
+}
+
+function updateEffects(dt){
+  if(bell.press>0) bell.press=Math.max(0,bell.press-dt/220);
+  for(const r of bell.rings) r.t+=dt;
+  bell.rings=bell.rings.filter(r=>r.t<600);
+  if(flash.a>0) flash.a=Math.max(0,flash.a-dt/650);
+  if(shakeT>0){ shakeT=Math.max(0,shakeT-dt/380); }
+  for(const f of floats){ f.t+=dt; f.y+=f.vy*dt/16; }
+  floats=floats.filter(f=>f.t<f.dur);
+}
+
+function loop(ts){
+  if(!last) last=ts;
+  let dt=ts-last; last=ts; if(dt>60) dt=60;   // clamp gros lags
+  if(phase!=='loading'){ update(dt); render(); }
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   RENDU
+   ============================================================ */
+function rr(x,y,w,h,r){ if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,w,h,r);return;}
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+function render(){
+  const {W,H,cx,cy}=L;
+  ctx.clearRect(0,0,W,H);
+
+  // fond dégradé + vignette
+  let g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#241236'); g.addColorStop(1,'#160b26');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // secousse
+  ctx.save();
+  if(shakeT>0){ const m=shakeMag*shakeT; ctx.translate(rnd(-m,m),rnd(-m,m)); }
+
+  // feutre central
+  const feltR=Math.min(W,H)*0.46;
+  let rg=ctx.createRadialGradient(cx,cy,feltR*0.15,cx,cy,feltR);
+  rg.addColorStop(0,'#5a3480'); rg.addColorStop(.65,'#3a1f5c'); rg.addColorStop(1,'rgba(28,16,44,0)');
+  ctx.fillStyle=rg; ctx.beginPath(); ctx.ellipse(cx,cy,feltR*1.18,feltR,0,0,7); ctx.fill();
+  ctx.lineWidth=Math.max(2,feltR*0.02); ctx.strokeStyle='rgba(255,201,77,.10)';
+  ctx.beginPath(); ctx.ellipse(cx,cy,feltR*1.0,feltR*0.86,0,0,7); ctx.stroke();
+
+  // halo du prochain joueur
+  const glowIdx=(phase==='idle'&&!flip.active)?nextFlipper(current):-1;
+
+  // joueurs
+  if(gameActive){
+    players.forEach((p,i)=>drawPlayer(p,i,glowIdx));
+    if(flip.active) drawFlipping();
+    for(const f of flyers) drawFlyer(f);
+  }
+
+  // sonnette
+  drawBell();
+
+  // textes flottants
+  for(const f of floats) drawFloat(f);
+
+  ctx.restore();
+
+  // flash plein écran
+  if(flash.a>0){ ctx.fillStyle=flash.c+flash.a.toFixed(3)+')'; ctx.fillRect(0,0,W,H); }
+}
+
+function drawPlayer(p,i,glowIdx){
+  const s=L.slots[i], {cardW:cw,cardH:ch}=L;
+  // pioche
+  const sd=shownDraw(p,i);
+  drawPileBacks(s.draw.x,s.draw.y,cw,ch,sd, i===glowIdx);
+  // pile visible
+  drawPlayedPile(p,s.vis.x,s.vis.y,cw,ch);
+  // plaque nom + total
+  drawPlate(p,i,s.label);
+}
+
+function drawPlate(p,i,lp){
+  const tot=p.draw.length+p.played.length;
+  ctx.font='600 15px Fredoka,Trebuchet MS,sans-serif';
+  const label=p.name, cnt=p.out?'éliminé':(tot+(tot>1?' cartes':' carte'));
+  const wName=ctx.measureText(label).width;
+  ctx.font='500 12.5px Fredoka,Trebuchet MS,sans-serif';
+  const wCnt=ctx.measureText(cnt).width;
+  const pad=11, gap=8, h=27, w=pad*2+wName+gap+wCnt;
+  const x=lp.x-w/2, y=lp.y-h/2;
+  ctx.save();
+  ctx.globalAlpha=p.out?0.5:1;
+  ctx.fillStyle='rgba(18,10,30,.72)';
+  rr(x,y,w,h,13); ctx.fill();
+  ctx.lineWidth=1.5; ctx.strokeStyle=p.out?'rgba(255,255,255,.12)':p.accent+'aa'; ctx.stroke();
+  // pastille accent
+  ctx.fillStyle=p.accent; ctx.beginPath(); ctx.arc(x+pad+2,y+h/2,4.5,0,7); ctx.fill();
+  ctx.fillStyle='#f6edff'; ctx.textBaseline='middle'; ctx.textAlign='left';
+  ctx.font='600 15px Fredoka,Trebuchet MS,sans-serif';
+  ctx.fillText(label,x+pad+13,y+h/2+1);
+  ctx.fillStyle=p.out?'#ff8b98':'#c3aade';
+  ctx.font='500 12.5px Fredoka,Trebuchet MS,sans-serif';
+  ctx.fillText(cnt,x+pad+13+wName+gap,y+h/2+1);
+  ctx.restore();
+}
+
+function drawPileBacks(x,y,w,h,n,glow){
+  if(n<=0){
+    ctx.save(); ctx.setLineDash([5,5]); ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,.12)';
+    rr(x-w/2,y-h/2,w,h,10); ctx.stroke(); ctx.restore(); return;
+  }
+  const layers=Math.min(n,8);
+  if(glow){
+    ctx.save(); const pulse=0.5+0.5*Math.sin(T/260);
+    ctx.shadowColor='rgba(255,201,77,'+(0.5+0.4*pulse)+')'; ctx.shadowBlur=22+10*pulse;
+    ctx.fillStyle='rgba(255,201,77,.001)'; rr(x-w/2,y-h/2,w,h,10); ctx.fill(); ctx.restore();
+  }
+  for(let k=0;k<layers;k++){
+    const off=(layers-1-k)*1.6;
+    drawBack(x-off, y-off, w, h, k===layers-1);
+  }
+  // compteur
+  ctx.font='700 13px Fredoka,Trebuchet MS,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const bx=x+w/2-3, by=y+h/2-3;
+  ctx.fillStyle='rgba(18,10,30,.85)'; ctx.beginPath(); ctx.arc(bx,by,12,0,7); ctx.fill();
+  ctx.lineWidth=1.4; ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.stroke();
+  ctx.fillStyle='#ffe08a'; ctx.fillText(n,bx,by+.5);
+}
+
+function drawBack(x,y,w,h,top){
+  ctx.save();
+  if(top){ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=12;ctx.shadowOffsetY=5;}
+  rr(x-w/2,y-h/2,w,h,10);
+  if(IMG.backOK){
+    ctx.save(); ctx.clip();
+    coverDraw(IMG.back,x-w/2,y-h/2,w,h);
+    ctx.restore();
+    ctx.lineWidth=2; ctx.strokeStyle='#fff'; ctx.stroke();
+  } else {
+    let g=ctx.createLinearGradient(x-w/2,y-h/2,x+w/2,y+h/2);
+    g.addColorStop(0,'#3f7fb0'); g.addColorStop(1,'#255a86');
+    ctx.fillStyle=g; ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle='#eaf4ff'; ctx.stroke();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=2;
+    for(let i=-h;i<w;i+=10){ctx.beginPath();ctx.moveTo(x-w/2+i,y-h/2);ctx.lineTo(x-w/2+i+h,y+h/2);ctx.stroke();}
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawPlayedPile(p,x,y,w,h){
+  if(!p.played.length){
+    ctx.save(); ctx.setLineDash([4,6]); ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,.10)';
+    rr(x-w/2,y-h/2,w,h,10); ctx.stroke(); ctx.restore(); return;
+  }
+  const layers=Math.min(p.played.length,5);
+  for(let k=0;k<layers-1;k++){
+    const off=(layers-1-k)*1.4;
+    ctx.save(); rr(x-w/2+off,y-h/2+off,w,h,10);
+    ctx.fillStyle='#fff'; ctx.fill();
+    ctx.lineWidth=1.4; ctx.strokeStyle='rgba(0,0,0,.12)'; ctx.stroke(); ctx.restore();
+  }
+  drawFace(top(p.played), x, y, w, h, true);
+}
+
+function drawFace(card,x,y,w,h,shadow){
+  ctx.save();
+  if(shadow){ctx.shadowColor='rgba(0,0,0,.4)';ctx.shadowBlur=14;ctx.shadowOffsetY=6;}
+  rr(x-w/2,y-h/2,w,h,10);
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.shadowColor='transparent';
+  ctx.lineWidth=2; ctx.strokeStyle='rgba(0,0,0,.14)'; ctx.stroke();
+  drawSprite(card,x-w/2,y-h/2,w,h);
+  if(DEBUG){
+    const tag=card.count+({banana:'B',lime:'C',plum:'P',strawberry:'F'}[card.fruit]);
+    ctx.fillStyle=FCOL[card.fruit]; rr(x-w/2+4,y-h/2+4,26,18,6); ctx.fill();
+    ctx.fillStyle='#111'; ctx.font='700 12px Fredoka,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(tag,x-w/2+17,y-h/2+13);
+  }
+  ctx.restore();
+}
+let DEBUG=false;
+
+function drawSprite(card,x,y,w,h){
+  const pad=w*0.10;
+  if(IMG.sheetOK){
+    const col=card.spriteIndex%CFG.cols, row=(card.spriteIndex/CFG.cols|0);
+    const ins=cell.w*0.03;   // léger crop pour éviter les lignes de grille
+    const sx=col*cell.w+ins, sy=row*cell.h+ins, sw=cell.w-2*ins, sh=cell.h-2*ins;
+    const aw=w-2*pad, ah=h-2*pad, sc=Math.min(aw/sw,ah/sh);
+    const dw=sw*sc, dh=sh*sc, dx=x+(w-dw)/2, dy=y+(h-dh)/2;
+    ctx.drawImage(IMG.sheet,sx,sy,sw,sh,dx,dy,dw,dh);
+  } else {
+    drawFruitFallback(card,x+pad,y+pad,w-2*pad,h-2*pad);
+  }
+}
+
+/* ---- fallback dessin des fruits (sans image) ---- */
+const POS={1:[[.5,.5]],2:[[.32,.34],[.68,.66]],3:[[.5,.28],[.3,.72],[.7,.72]],
+  4:[[.3,.3],[.7,.3],[.3,.7],[.7,.7]],5:[[.3,.3],[.7,.3],[.5,.5],[.3,.7],[.7,.7]]};
+function drawFruitFallback(card,bx,by,bw,bh){
+  const pts=POS[card.count]||POS[1];
+  const r=Math.min(bw,bh)*(card.count<=2?0.20:card.count<=4?0.155:0.135);
+  for(const [nx,ny] of pts) drawFruit(card.fruit,bx+nx*bw,by+ny*bh,r);
+}
+function drawFruit(f,x,y,r){
+  ctx.save(); ctx.lineWidth=Math.max(1.4,r*0.10); ctx.strokeStyle='rgba(0,0,0,.35)';
+  if(f==='lime'||f==='plum'){
+    const g=ctx.createRadialGradient(x-r*.3,y-r*.3,r*.2,x,y,r);
+    g.addColorStop(0,FCOL2[f]); g.addColorStop(1,FCOL[f]);
+    ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(x,y,r*.92,r,0,0,7); ctx.fill(); ctx.stroke();
+    if(f==='plum'){ctx.strokeStyle='#6a4a2a';ctx.lineWidth=r*.14;ctx.beginPath();ctx.moveTo(x+r*.1,y-r);ctx.lineTo(x+r*.25,y-r*1.35);ctx.stroke();}
+  } else if(f==='banana'){
+    ctx.translate(x,y); ctx.rotate(-0.5);
+    ctx.fillStyle=FCOL.banana;
+    ctx.beginPath(); ctx.arc(0,0,r,Math.PI*0.15,Math.PI*0.95,false);
+    ctx.arc(0,-r*0.42,r*0.9,Math.PI*0.95,Math.PI*0.15,true); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  } else { // strawberry
+    ctx.fillStyle=FCOL.strawberry;
+    ctx.beginPath();
+    ctx.moveTo(x,y+r*1.05);
+    ctx.quadraticCurveTo(x-r*1.05,y+r*.2,x-r*.65,y-r*.55);
+    ctx.quadraticCurveTo(x,y-r*.85,x+r*.65,y-r*.55);
+    ctx.quadraticCurveTo(x+r*1.05,y+r*.2,x,y+r*1.05);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // graines
+    ctx.fillStyle='rgba(255,240,200,.9)';
+    for(const [dx,dy] of [[-.25,-.1],[.25,-.1],[0,.25],[-.4,.3],[.4,.3],[0,-.35]]){
+      ctx.beginPath();ctx.ellipse(x+dx*r,y+dy*r,r*.07,r*.11,0,0,7);ctx.fill();}
+    // calice
+    ctx.fillStyle='#4faa4f';
+    ctx.beginPath();
+    ctx.moveTo(x,y-r*.5);
+    ctx.lineTo(x-r*.5,y-r*.75);ctx.lineTo(x-r*.15,y-r*.55);
+    ctx.lineTo(x,y-r*.9);ctx.lineTo(x+r*.15,y-r*.55);
+    ctx.lineTo(x+r*.5,y-r*.75);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFlipping(){
+  const s=L.slots[flip.player], {cardW:w,cardH:h}=L;
+  const p=flip.t/flip.dur, sxScale=Math.abs(Math.cos(p*Math.PI));
+  const face=p>=0.5;
+  const lift=Math.sin(p*Math.PI)*10;
+  ctx.save();
+  ctx.translate(s.vis.x, s.vis.y-lift);
+  ctx.scale(Math.max(0.02,sxScale),1);
+  if(face) drawFace(flip.card,0,0,w,h,true);
+  else drawBack(0,0,w,h,true);
+  ctx.restore();
+}
+
+function drawFlyer(f){
+  const tgt=flyerTarget(f);
+  const tt=clamp(f.t/f.dur,0,1), e=easeIO(tt);
+  const x=f.from.x+(tgt.x-f.from.x)*e;
+  const arc=(f.deal? -60: -70)*Math.sin(tt*Math.PI);
+  const y=f.from.y+(tgt.y-f.from.y)*e + arc;
+  const {cardW:w,cardH:h}=L;
+  const rot=f.rot0*(1-e);
+  ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+  if(f.faceUp) drawFace(f.card,0,0,w,h,true); else drawBack(0,0,w,h,true);
+  ctx.restore();
+}
+
+/* ---- sonnette ---- */
+function drawBell(){
+  const {cx,cy,bellR:R}=L;
+  // ondes
+  for(const r of bell.rings){
+    const t=r.t/600, rad=R*(1+t*1.7), a=(1-t)*0.5;
+    ctx.lineWidth=Math.max(2,R*0.08*(1-t));
+    ctx.strokeStyle=(r.good?'rgba(120,235,150,':'rgba(255,110,130,')+a.toFixed(3)+')';
+    ctx.beginPath(); ctx.arc(cx,cy,rad,0,7); ctx.stroke();
+  }
+  const press=bell.press, sc=1-press*0.16+Math.sin(press*Math.PI)*0.05;
+  ctx.save(); ctx.translate(cx,cy+press*4); ctx.scale(sc,sc);
+  // ombre au sol
+  ctx.fillStyle='rgba(0,0,0,.30)'; ctx.beginPath(); ctx.ellipse(0,R*0.9,R*0.95,R*0.28,0,0,7); ctx.fill();
+  if(IMG.bellOK){
+    const s=R*2.35;
+    ctx.drawImage(IMG.bell,-s/2,-s/2-R*0.15,s,s);
+  } else {
+    drawBellShape(R);
+  }
+  ctx.restore();
+}
+function drawBellShape(R){
+  // base dorée
+  ctx.fillStyle='#e8a91f'; ctx.beginPath(); ctx.ellipse(0,R*0.55,R*0.95,R*0.32,0,0,7); ctx.fill();
+  ctx.fillStyle='#f6c53d';
+  ctx.beginPath(); ctx.rect(-R*0.95,R*0.2,R*1.9,R*0.4); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,R*0.2,R*0.95,R*0.32,0,0,7); ctx.fill();
+  // dôme blanc
+  let g=ctx.createRadialGradient(-R*.3,-R*.35,R*.2,0,0,R);
+  g.addColorStop(0,'#ffffff'); g.addColorStop(1,'#d7dde3');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,R*0.05,R*0.9,Math.PI,0); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,R*0.05,R*0.9,R*0.3,0,0,Math.PI); ctx.fill();
+  // bouton rouge
+  let gr=ctx.createRadialGradient(-R*.12,-R*.5,R*.05,0,-R*.4,R*.4);
+  gr.addColorStop(0,'#ff6a6a'); gr.addColorStop(1,'#e01f2d');
+  ctx.fillStyle=gr; ctx.beginPath(); ctx.ellipse(0,-R*0.42,R*0.32,R*0.24,0,0,7); ctx.fill();
+}
+
+function mkFloat(p,text,color,big){return {x:p.x,y:p.y,text,color,big:!!big,t:0,dur:1100,vy:-0.55};}
+function drawFloat(f){
+  const a=1-clamp((f.t-700)/400,0,1);
+  ctx.save(); ctx.globalAlpha=a;
+  ctx.font=(f.big?'700 26px':'600 18px')+' Fredoka,Trebuchet MS,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth=4; ctx.strokeStyle='rgba(0,0,0,.5)'; ctx.strokeText(f.text,f.x,f.y);
+  ctx.fillStyle=f.color; ctx.fillText(f.text,f.x,f.y);
+  ctx.restore();
+}
+
+/* ---- coverDraw : remplit un rect en gardant le ratio (crop) ---- */
+function coverDraw(img,x,y,w,h){
+  const ir=img.width/img.height, rr2=w/h;
+  let sw,sh,sx,sy;
+  if(ir>rr2){ sh=img.height; sw=sh*rr2; sx=(img.width-sw)/2; sy=0; }
+  else { sw=img.width; sh=sw/rr2; sx=0; sy=(img.height-sh)/2; }
+  ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
+}
+
+/* ============================================================
+   ENTRÉES
+   ============================================================ */
+cv.addEventListener('pointerdown',e=>{ e.preventDefault(); if(AC&&AC.state==='suspended')AC.resume(); humanRing(); });
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.code==='Enter'){ e.preventDefault(); if(AC&&AC.state==='suspended')AC.resume(); humanRing(); }
+  if(e.code==='KeyD'){ DEBUG=!DEBUG; }
+});
+
+/* ============================================================
+   UI / MODALES
+   ============================================================ */
+const $=id=>document.getElementById(id);
+function hideAll(){['startLayer','rulesLayer','overLayer'].forEach(i=>$(i).classList.remove('show'));}
+function showLayer(id){$(id).classList.add('show');}
+function showRules(){showLayer('rulesLayer');}
+function startGame(){ if(!AC) audio(); if(AC&&AC.state==='suspended')AC.resume(); newGame(); }
+
+$('playBtn').onclick=()=>{startGame();};
+$('rulesBtn').onclick=showRules;
+$('rulesBtn2').onclick=showRules;
+$('rulesClose').onclick=()=>$('rulesLayer').classList.remove('show');
+$('newBtn').onclick=()=>{ startGame(); };
+$('overReplay').onclick=()=>{ startGame(); };
+$('soundBtn').onclick=()=>{ muted=!muted; $('soundBtn').textContent=muted?'🔇':'🔊'; if(!muted&&AC&&AC.state==='suspended')AC.resume(); };
+document.querySelectorAll('#speedSeg button').forEach(b=>{
+  b.onclick=()=>{ document.querySelectorAll('#speedSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); SPEED=parseFloat(b.dataset.sp); };
+});
+// clic sur le fond des modales info pour fermer
+['rulesLayer'].forEach(id=>$(id).addEventListener('pointerdown',e=>{ if(e.target===$(id)) $(id).classList.remove('show'); }));
+
+function showOver(widx){
+  const w=players[widx];
+  $('overTitle').textContent = w.human? '🏆 Victoire !' : 'Partie terminée';
+  $('overSub').textContent = w.human? 'Tu rafles la mise, bien joué.' : (w.name+' remporte la partie.');
+  // classement par total de cartes
+  const order=players.map((p,i)=>({p,i,tot:p.draw.length+p.played.length}))
+                     .sort((a,b)=>b.tot-a.tot);
+  $('overScores').innerHTML = order.map(o=>{
+    const acc=o.p.accent;
+    return `<div class="scorerow"><div class="nm"><span class="sq" style="background:${acc}"></span>${o.p.name}${o.i===widx?' 👑':''}</div><div style="color:var(--dim)">${o.tot} carte${o.tot>1?'s':''}</div></div>`;
+  }).join('');
+  showLayer('overLayer');
+}
+
+/* ============================================================
+   DÉMARRAGE
+   ============================================================ */
+window.addEventListener('resize',resize);
+resize();
+
+// on lance le rendu même en chargement (fond), puis on active le jeu après assets+police
+(async ()=>{
+  // police : on attend au mieux Fredoka pour un rendu canvas net
+  try{ if(document.fonts&&document.fonts.load){ await Promise.race([document.fonts.load('700 20px Fredoka'), new Promise(r=>setTimeout(r,1200))]); } }catch(e){}
+  await loadAssets();
+  // joueurs fictifs (pour un nextFlipper sûr) ; table figée derrière l'accueil
+  players=[
+    {name:'',human:true, accent:'#ffcf4d',draw:[],played:[],out:false},
+    {name:'',human:false,accent:'#ff6b7a',draw:[],played:[],out:false},
+    {name:'',human:false,accent:'#8ec741',draw:[],played:[],out:false},
+    {name:'',human:false,accent:'#f6cf2b',draw:[],played:[],out:false},
+  ];
+  gameActive=false; phase='idle'; flipTimer=1e9;   // pas de flip tant qu'on n'a pas cliqué Jouer
+})();
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
